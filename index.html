@@ -4,124 +4,103 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Live Stock Tally Desk</title>
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-    .accordion-content { transition: max-height 0.3s ease-in-out; overflow: hidden; }
+    /* Prevent iOS zoom on inputs */
+    input[type="number"] { font-size: 16px; } 
   </style>
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col">
 
-  <!-- HEADER -->
   <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
       <div>
         <h1 class="text-lg font-bold text-slate-900 leading-tight">Live Stock Tally Desk</h1>
-        <p class="text-xs text-slate-500 font-medium">Auto-synced physical counting interface</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <span id="statusBadgeMap" class="text-[10px] px-2 py-1 rounded-full font-bold bg-slate-100 text-slate-400">Map: Loading</span>
         <span id="statusBadgeStock" class="text-[10px] px-2 py-1 rounded-full font-bold bg-slate-100 text-slate-400">Stock: Loading</span>
       </div>
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-6 w-full flex-1 flex flex-col gap-6">
+  <main class="max-w-7xl mx-auto px-2 sm:px-4 py-4 w-full flex-1 flex flex-col gap-4">
     
-    <!-- FALLBACK FILE UPLOAD (Visible only if auto-load fails) -->
     <div id="fallbackUploadContainer" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="text-sm text-rose-800">
         <p class="font-bold">Auto-load Failed.</p>
-        <p class="text-xs">Ensure files are in the same folder, or upload them manually to continue.</p>
+        <p class="text-xs">Ensure files are in the same folder, or upload manually.</p>
       </div>
       <div class="flex gap-2">
         <input type="file" id="fileMap" accept=".xlsx, .xls" class="hidden" />
-        <button onclick="document.getElementById('fileMap').click()" class="text-xs font-semibold px-3 py-1.5 bg-white text-rose-700 border border-rose-300 rounded cursor-pointer hover:bg-rose-100">Upload Map</button>
+        <button onclick="document.getElementById('fileMap').click()" class="text-xs font-semibold px-3 py-2 bg-white text-rose-700 border border-rose-300 rounded-lg">Upload Map</button>
         <input type="file" id="fileStock" accept=".xlsx, .xls" class="hidden" />
-        <button onclick="document.getElementById('fileStock').click()" class="text-xs font-semibold px-3 py-1.5 bg-rose-600 text-white rounded cursor-pointer hover:bg-rose-700">Upload Live Stock</button>
+        <button onclick="document.getElementById('fileStock').click()" class="text-xs font-semibold px-3 py-2 bg-rose-600 text-white rounded-lg">Upload Live Stock</button>
       </div>
     </div>
 
-    <!-- COUNTER TABS -->
-    <section class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm">
-      <div id="counterTabs" class="flex flex-wrap gap-1.5">
+    <section class="bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm overflow-x-auto custom-scrollbar">
+      <div id="counterTabs" class="flex gap-1.5 whitespace-nowrap min-w-max">
         <span class="text-sm text-slate-400 p-2 italic">Loading counters...</span>
       </div>
     </section>
 
-    <!-- WORKSPACE AREA -->
     <div id="workspaceArea" class="hidden space-y-4">
       
-      <!-- Workspace Header -->
-      <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h2 id="activeCounterTitle" class="text-xl font-extrabold text-slate-800 tracking-tight uppercase">COUNTER</h2>
-          <div class="flex items-center gap-4 mt-1 text-sm font-semibold">
-            <p class="text-slate-500">System Expected: <span id="hdrExpected" class="text-slate-900 font-bold">0</span></p>
-            <p class="text-blue-600">Physical Counted: <span id="hdrCounted" class="font-bold">0</span></p>
+          <h2 id="activeCounterTitle" class="text-xl font-extrabold text-slate-800 uppercase tracking-tight">COUNTER</h2>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm font-semibold">
+            <p class="text-slate-500">Expected: <span id="hdrExpected" class="text-slate-900 font-bold">0</span></p>
+            <p class="text-blue-600">Counted: <span id="hdrCounted" class="font-bold">0</span></p>
             <p id="hdrVariance" class="text-slate-400">Variance: 0</p>
           </div>
         </div>
 
-        <!-- Tally Mode Toggle -->
-        <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
-          <button id="btnModeProduct" onclick="setTallyMode('product')" class="px-4 py-2 rounded bg-white text-slate-900 shadow-sm transition-all cursor-pointer">
-            📦 Tally by Product
-          </button>
-          <button id="btnModeSection" onclick="setTallyMode('section')" class="px-4 py-2 rounded text-slate-500 hover:text-slate-900 transition-all cursor-pointer">
-            🗄️ Tally by Section
-          </button>
+        <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold shrink-0 self-start sm:self-center">
+          <button id="btnModeProduct" onclick="setTallyMode('product')" class="px-3 py-2 rounded-md bg-white text-slate-900 shadow-sm transition-all w-1/2 sm:w-auto">By Product</button>
+          <button id="btnModeSection" onclick="setTallyMode('section')" class="px-3 py-2 rounded-md text-slate-500 hover:text-slate-900 transition-all w-1/2 sm:w-auto">By Section</button>
         </div>
       </div>
 
-      <!-- MAIN TALLY CONTAINER -->
       <div id="tallyContainer" class="space-y-3 pb-20"></div>
 
     </div>
   </main>
 
   <script>
-    // Constants & Core Configurations
     const FILE_MAP = "Stock_related_map.xlsx";
     const FILE_STOCK = "Live_Stock_Inventory_19-10-2026_03-19-44 PM.xlsx";
     
-    // Default structure for sections (instances per counter type)
-    const baseSectionsConfig = [
-      { prefix: "Main counter", count: 4 },
-      { prefix: "Window counter", count: 4 },
-      { prefix: "Bed counter", count: 4 },
-      { prefix: "Baby counter", count: 1 },
-      { prefix: "Aveer", count: 1 },
-      { prefix: "Back stock", count: 1 },
-      { prefix: "Others", count: 1 },
-      { prefix: "BOS", count: 1 }
+    // Grouped section definitions
+    const baseGroups = [
+      { name: "Main counter", count: 4 },
+      { name: "Window counter", count: 4 },
+      { name: "Bed counter", count: 4 },
+      { name: "Baby counter", count: 1 },
+      { name: "Aveer", count: 1 },
+      { name: "Back stock", count: 1 },
+      { name: "Others", count: 1 },
+      { name: "BOS", count: 1 }
     ];
 
-    // Application State
     let mapping = { groups: {}, categories: {}, counters: {} };
-    let expectedStock = {}; // { counterName: { productName: qty } }
+    let expectedStock = {}; 
     let allCounters = [];
     let activeCounter = null;
-    let tallyMode = "product"; // 'product' or 'section'
+    let tallyMode = "product"; 
     
-    // Central source of truth for all entered tally data
-    // tallyData[counter][product][section] = { expr: "10+5+2", total: 17 }
+    // tallyData[counter][product][group][section] = { history: [5, 10], total: 15 }
     let tallyData = {}; 
-    
-    // Dynamically generated sections list per counter
-    // activeSections[counter] = ["Main counter 1", "Main counter 2", ...]
+    // activeSections[counter][group] = ["Main counter 1", "Main counter 2", ...]
     let activeSections = {}; 
-
-    // Open/Close state for accordions
     let expandedAccordions = {};
 
-    // --- INITIALIZATION ---
     window.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("fileMap").addEventListener("change", (e) => handleManualUpload(e.target.files[0], "map"));
       document.getElementById("fileStock").addEventListener("change", (e) => handleManualUpload(e.target.files[0], "stock"));
@@ -129,51 +108,26 @@
     });
 
     async function autoLoadFiles() {
-      let mapLoaded = false;
-      let stockLoaded = false;
-
+      let mapLoaded = false, stockLoaded = false;
       try {
         const resMap = await fetch(FILE_MAP);
-        if (resMap.ok) {
-          const ab = await resMap.arrayBuffer();
-          parseMapData(ab);
-          mapLoaded = true;
-          updateBadge("statusBadgeMap", "Map: Active", "bg-emerald-100 text-emerald-800");
-        } else throw new Error("Map not found");
-      } catch (err) {
-        updateBadge("statusBadgeMap", "Map: Failed", "bg-rose-100 text-rose-800");
-      }
+        if (resMap.ok) { parseMapData(await resMap.arrayBuffer()); mapLoaded = true; updateBadge("statusBadgeMap", "Map: Active", "bg-emerald-100 text-emerald-800"); }
+      } catch (err) { updateBadge("statusBadgeMap", "Map: Failed", "bg-rose-100 text-rose-800"); }
 
       try {
         const resStock = await fetch(FILE_STOCK);
-        if (resStock.ok) {
-          const ab = await resStock.arrayBuffer();
-          parseLiveStock(ab);
-          stockLoaded = true;
-          updateBadge("statusBadgeStock", "Stock: Active", "bg-emerald-100 text-emerald-800");
-        } else throw new Error("Stock not found");
-      } catch (err) {
-        updateBadge("statusBadgeStock", "Stock: Failed", "bg-rose-100 text-rose-800");
-      }
+        if (resStock.ok) { parseLiveStock(await resStock.arrayBuffer()); stockLoaded = true; updateBadge("statusBadgeStock", "Stock: Active", "bg-emerald-100 text-emerald-800"); }
+      } catch (err) { updateBadge("statusBadgeStock", "Stock: Failed", "bg-rose-100 text-rose-800"); }
 
-      if (!mapLoaded || !stockLoaded) {
-        document.getElementById("fallbackUploadContainer").classList.remove("hidden");
-      }
+      if (!mapLoaded || !stockLoaded) document.getElementById("fallbackUploadContainer").classList.remove("hidden");
     }
 
     function handleManualUpload(file, type) {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (e) => {
-        try {
-          if (type === "map") {
-            parseMapData(e.target.result);
-            updateBadge("statusBadgeMap", "Map: Uploaded", "bg-blue-100 text-blue-800");
-          } else {
-            parseLiveStock(e.target.result);
-            updateBadge("statusBadgeStock", "Stock: Uploaded", "bg-blue-100 text-blue-800");
-          }
-        } catch (err) { alert("Error parsing file."); }
+        if (type === "map") { parseMapData(e.target.result); updateBadge("statusBadgeMap", "Map: Uploaded", "bg-blue-100 text-blue-800"); }
+        else { parseLiveStock(e.target.result); updateBadge("statusBadgeStock", "Stock: Uploaded", "bg-blue-100 text-blue-800"); }
       };
       reader.readAsArrayBuffer(file);
     }
@@ -183,35 +137,24 @@
       if(el) { el.textContent = text; el.className = `text-[10px] px-2 py-1 rounded-full font-bold ${classes}`; }
     }
 
-    // --- PARSING LOGIC ---
     function parseMapData(buffer) {
       const wb = XLSX.read(buffer, { type: "array" });
-      
       const grpSheet = wb.Sheets["Group"];
-      if (grpSheet) XLSX.utils.sheet_to_json(grpSheet).forEach(r => {
-        if (r["Original Group"] && r["Final Group"]) mapping.groups[String(r["Original Group"]).trim()] = String(r["Final Group"]).trim();
-      });
-
+      if (grpSheet) XLSX.utils.sheet_to_json(grpSheet).forEach(r => { if (r["Original Group"] && r["Final Group"]) mapping.groups[String(r["Original Group"]).trim()] = String(r["Final Group"]).trim(); });
       const catSheet = wb.Sheets["Category"];
-      if (catSheet) XLSX.utils.sheet_to_json(catSheet).forEach(r => {
-        if (r["Original Category"] && r["Final Category"]) mapping.categories[String(r["Original Category"]).trim()] = String(r["Final Category"]).trim();
-      });
-
+      if (catSheet) XLSX.utils.sheet_to_json(catSheet).forEach(r => { if (r["Original Category"] && r["Final Category"]) mapping.categories[String(r["Original Category"]).trim()] = String(r["Final Category"]).trim(); });
       const cntSheet = wb.Sheets["Counter"];
       if (cntSheet) XLSX.utils.sheet_to_json(cntSheet).forEach(r => {
         const combined = String(r["COMBINED"] || (r["GROUP"] + r["CATEGORY"])).trim();
         if (r["COUNTER"]) mapping.counters[combined] = String(r["COUNTER"]).trim();
       });
-
-      // Re-process stock if map loaded late
       if (Object.keys(expectedStock).length > 0) reprocessStock();
     }
 
     let rawLiveStockItems = [];
     function parseLiveStock(buffer) {
       const wb = XLSX.read(buffer, { type: "array" });
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-      rawLiveStockItems = rows.map(r => ({
+      rawLiveStockItems = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]).map(r => ({
         itemCode: String(r["Item Code"] || "").trim(),
         origGroup: String(r["Product Group Description"] || "").trim(),
         origCat: String(r["Product Category Description"] || "").trim(),
@@ -223,14 +166,12 @@
 
     function resolveCounter(origGroup, origCat, binCode, itemCode) {
       const cleanBin = String(binCode || "").trim().toUpperCase();
-      if (cleanBin === "GEP") return { counter: "GEP", finalCat: "GEP" };
-      if (cleanBin === "TEP") return { counter: "TEP", finalCat: "TEP" };
+      if (cleanBin === "GEP") return { counter: "GEP", prodKey: "GEP" };
+      if (cleanBin === "TEP") return { counter: "TEP", prodKey: "TEP" };
       
       let finalGroup = mapping.groups[origGroup] || origGroup || "Gold Plain";
       const finalCat = mapping.categories[origCat] || origCat || "OTHERS";
-      const combined = finalGroup + finalCat;
-      
-      let counter = mapping.counters[combined];
+      let counter = mapping.counters[finalGroup + finalCat];
       if (!counter) {
         if (finalCat === "COINS") counter = "COIN";
         else if (finalCat === "BANGLES") counter = "BANGLE";
@@ -258,10 +199,7 @@
       
       rawLiveStockItems.forEach(item => {
         const { counter, prodKey } = resolveCounter(item.origGroup, item.origCat, item.binCode, item.itemCode);
-        
-        // Exclusions requested
         if (counter === "GEP" || counter === "TEP" || counter === "ALL") return;
-
         validCounters.add(counter);
         if (!expectedStock[counter]) expectedStock[counter] = {};
         expectedStock[counter][prodKey] = (expectedStock[counter][prodKey] || 0) + item.qty;
@@ -269,23 +207,24 @@
 
       allCounters = Array.from(validCounters).sort();
       
-      // Initialize tally structure and sections for new counters
       allCounters.forEach(cnt => {
         if (!tallyData[cnt]) tallyData[cnt] = {};
         if (!activeSections[cnt]) {
-          activeSections[cnt] = [];
-          baseSectionsConfig.forEach(cfg => {
-            if (cfg.count === 1) activeSections[cnt].push(cfg.prefix);
-            else {
-              for(let i=1; i<=cfg.count; i++) activeSections[cnt].push(`${cfg.prefix} ${i}`);
-            }
+          activeSections[cnt] = {};
+          baseGroups.forEach(g => {
+            activeSections[cnt][g.name] = [];
+            if (g.count === 1) activeSections[cnt][g.name].push(g.name);
+            else for(let i=1; i<=g.count; i++) activeSections[cnt][g.name].push(`${g.name} ${i}`);
           });
         }
         
         Object.keys(expectedStock[cnt]).forEach(prod => {
           if (!tallyData[cnt][prod]) tallyData[cnt][prod] = {};
-          activeSections[cnt].forEach(sec => {
-            if (!tallyData[cnt][prod][sec]) tallyData[cnt][prod][sec] = { expr: "", total: 0 };
+          Object.keys(activeSections[cnt]).forEach(grp => {
+            if (!tallyData[cnt][prod][grp]) tallyData[cnt][prod][grp] = {};
+            activeSections[cnt][grp].forEach(sec => {
+              if (!tallyData[cnt][prod][grp][sec]) tallyData[cnt][prod][grp][sec] = { history: [], total: 0 };
+            });
           });
         });
       });
@@ -294,17 +233,13 @@
       if (allCounters.length > 0 && !activeCounter) switchCounter(allCounters[0]);
     }
 
-    // --- UI RENDERING ---
     function renderCounterTabs() {
       const container = document.getElementById("counterTabs");
       container.innerHTML = "";
       allCounters.forEach(cnt => {
         const btn = document.createElement("button");
-        const isActive = cnt === activeCounter;
         btn.textContent = cnt;
-        btn.className = `text-xs px-4 py-2 rounded-lg font-bold transition-all shadow-sm cursor-pointer border ${
-          isActive ? "bg-amber-500 text-white border-amber-600 shadow-amber-200" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-        }`;
+        btn.className = `text-xs px-4 py-2 rounded-lg font-bold transition-all shadow-sm cursor-pointer border ${cnt === activeCounter ? "bg-amber-500 text-white border-amber-600 shadow-amber-200" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`;
         btn.onclick = () => switchCounter(cnt);
         container.appendChild(btn);
       });
@@ -312,7 +247,7 @@
 
     function switchCounter(cnt) {
       activeCounter = cnt;
-      expandedAccordions = {}; // reset expansions on tab switch
+      expandedAccordions = {}; 
       renderCounterTabs();
       document.getElementById("workspaceArea").classList.remove("hidden");
       document.getElementById("activeCounterTitle").textContent = `${cnt} COUNTER`;
@@ -321,58 +256,43 @@
 
     function setTallyMode(mode) {
       tallyMode = mode;
-      document.getElementById("btnModeProduct").className = `px-4 py-2 rounded shadow-sm transition-all cursor-pointer text-xs font-bold ${mode === 'product' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
-      document.getElementById("btnModeSection").className = `px-4 py-2 rounded shadow-sm transition-all cursor-pointer text-xs font-bold ${mode === 'section' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
+      document.getElementById("btnModeProduct").className = `px-3 py-2 rounded-md shadow-sm transition-all text-xs font-bold w-1/2 sm:w-auto ${mode === 'product' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
+      document.getElementById("btnModeSection").className = `px-3 py-2 rounded-md shadow-sm transition-all text-xs font-bold w-1/2 sm:w-auto ${mode === 'section' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
+      expandedAccordions = {};
       renderWorkspace();
     }
 
-    function toggleAccordion(id) {
-      expandedAccordions[id] = !expandedAccordions[id];
+    function toggleAccordion(id) { expandedAccordions[id] = !expandedAccordions[id]; renderWorkspace(); }
+
+    function addSubSection(groupName) {
+      const list = activeSections[activeCounter][groupName];
+      const newName = `${groupName} ${list.length + 1}`;
+      list.push(newName);
+      Object.keys(tallyData[activeCounter]).forEach(prod => {
+        tallyData[activeCounter][prod][groupName][newName] = { history: [], total: 0 };
+      });
       renderWorkspace();
     }
 
-    function parseMathInput(str) {
-      if (!str) return 0;
-      // Evaluate basic summation string like "5+10+2"
-      const parts = str.split('+');
-      return parts.reduce((acc, val) => acc + (Number(val.trim()) || 0), 0);
-    }
-
-    function handleInput(prod, sec, value) {
-      const cleanVal = value.replace(/[^0-9+]/g, ''); // prevent invalid chars
-      const total = parseMathInput(cleanVal);
-      tallyData[activeCounter][prod][sec] = { expr: cleanVal, total: total };
-      renderWorkspace(); // Recalculates headers and updates UI
-      
-      // Auto-focus back to the input that was just typed in
-      const inputId = `input_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
-      setTimeout(() => {
-        const el = document.getElementById(inputId);
-        if (el) { el.focus(); el.value = cleanVal; } // set val to keep cursor position if possible
-      }, 0);
-    }
-
-    function addNewSection() {
-      const newName = prompt("Enter new section name (e.g. 'Main counter 5'):");
-      if (newName && newName.trim()) {
-        const sName = newName.trim();
-        if(!activeSections[activeCounter].includes(sName)) {
-          activeSections[activeCounter].push(sName);
-          // Initialize empty data for this section across all products
-          Object.keys(tallyData[activeCounter]).forEach(prod => {
-            tallyData[activeCounter][prod][sName] = { expr: "", total: 0 };
-          });
-          renderWorkspace();
-        }
+    // Input Logic - The Calculator
+    function addTallyValue(prod, grp, sec, inputId) {
+      const inputEl = document.getElementById(inputId);
+      const val = Number(inputEl.value);
+      if (val > 0) {
+        const data = tallyData[activeCounter][prod][grp][sec];
+        data.history.push(val);
+        data.total += val;
+        inputEl.value = ""; 
+        renderWorkspace();
+        setTimeout(() => document.getElementById(inputId)?.focus(), 0);
       }
     }
 
-    function deleteSection(sec) {
-      if(confirm(`Are you sure you want to remove section: ${sec}? Data entered here will be cleared.`)) {
-        activeSections[activeCounter] = activeSections[activeCounter].filter(s => s !== sec);
-        Object.keys(tallyData[activeCounter]).forEach(prod => {
-          delete tallyData[activeCounter][prod][sec];
-        });
+    function undoTallyValue(prod, grp, sec) {
+      const data = tallyData[activeCounter][prod][grp][sec];
+      if (data.history.length > 0) {
+        const last = data.history.pop();
+        data.total -= last;
         renderWorkspace();
       }
     }
@@ -382,126 +302,116 @@
 
       const container = document.getElementById("tallyContainer");
       const products = Object.keys(expectedStock[activeCounter]).sort();
-      const sections = activeSections[activeCounter];
+      const groups = Object.keys(activeSections[activeCounter]);
       
-      let grandExpected = 0;
-      let grandCounted = 0;
-
-      // Calculate totals
+      let grandExpected = 0, grandCounted = 0;
       products.forEach(p => {
         grandExpected += expectedStock[activeCounter][p] || 0;
-        sections.forEach(s => {
-          const t = tallyData[activeCounter][p]?.[s]?.total || 0;
-          grandCounted += t;
+        groups.forEach(g => {
+          activeSections[activeCounter][g].forEach(s => {
+            grandCounted += tallyData[activeCounter][p]?.[g]?.[s]?.total || 0;
+          });
         });
       });
 
-      // Update Header
       document.getElementById("hdrExpected").textContent = grandExpected;
       document.getElementById("hdrCounted").textContent = grandCounted;
       const varEl = document.getElementById("hdrVariance");
       const diff = grandCounted - grandExpected;
-      if (diff === 0) {
-        varEl.textContent = "Exact Balance";
-        varEl.className = "text-emerald-600 font-bold";
-      } else {
-        varEl.textContent = `Variance: ${diff > 0 ? '+'+diff : diff}`;
-        varEl.className = "text-rose-600 font-bold";
-      }
+      varEl.textContent = diff === 0 ? "Balanced" : `Variance: ${diff > 0 ? '+'+diff : diff}`;
+      varEl.className = diff === 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
 
       let html = "";
 
-      if (tallyMode === "product") {
-        html += `<div class="flex justify-end mb-2"><button onclick="addNewSection()" class="text-xs font-semibold text-blue-600 hover:underline">➕ Add Custom Section</button></div>`;
+      const generateInputUI = (prod, grp, sec) => {
+        const data = tallyData[activeCounter][prod]?.[grp]?.[sec] || {history: [], total: 0};
+        const inputId = `inp_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
+        const histStr = data.history.length > 0 ? data.history.join(" + ") : "0";
         
+        return `
+          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+              <label class="text-xs font-bold text-slate-700 uppercase tracking-wide truncate w-3/5">${tallyMode === 'product' ? sec : prod}</label>
+              <div class="flex items-center gap-1 text-[10px] text-slate-400 max-w-[40%] overflow-x-auto custom-scrollbar whitespace-nowrap">
+                <span>${histStr}</span>
+                ${data.history.length > 0 ? `<button onclick="undoTallyValue('${prod}', '${grp}', '${sec}')" class="ml-1 text-rose-500 hover:text-rose-700" title="Undo last entry">↶</button>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <input type="number" id="${inputId}" placeholder="Enter count" class="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-base font-semibold focus:outline-none focus:border-blue-400 focus:bg-white transition-colors" onkeypress="if(event.key === 'Enter') addTallyValue('${prod}', '${grp}', '${sec}', '${inputId}')" />
+              <button onclick="addTallyValue('${prod}', '${grp}', '${sec}', '${inputId}')" class="bg-blue-600 active:bg-blue-700 text-white rounded-lg w-10 h-10 flex items-center justify-center font-bold text-lg shadow-sm">+</button>
+              <div class="min-w-[40px] text-right font-bold text-slate-900 text-lg">= ${data.total}</div>
+            </div>
+          </div>
+        `;
+      };
+
+      if (tallyMode === "product") {
         products.forEach((prod, idx) => {
           const accId = `acc_prod_${idx}`;
           const isExp = expandedAccordions[accId];
           
           let prodExpected = expectedStock[activeCounter][prod] || 0;
           let prodCounted = 0;
-          sections.forEach(s => prodCounted += (tallyData[activeCounter][prod]?.[s]?.total || 0));
+          groups.forEach(g => activeSections[activeCounter][g].forEach(s => prodCounted += (tallyData[activeCounter][prod]?.[g]?.[s]?.total || 0)));
           let pDiff = prodCounted - prodExpected;
-          
           let diffBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${pDiff === 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">${pDiff === 0 ? 'Balanced' : (pDiff > 0 ? '+'+pDiff : pDiff)}</span>`;
 
           html += `
-          <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div onclick="toggleAccordion('${accId}')" class="px-4 py-3 bg-slate-50 cursor-pointer flex items-center justify-between border-b border-slate-100 hover:bg-slate-100 transition-colors">
-              <div class="flex items-center gap-3">
-                <span class="text-lg">${isExp ? '📂' : '📁'}</span>
+          <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div onclick="toggleAccordion('${accId}')" class="px-4 py-3 cursor-pointer flex items-center justify-between border-b border-slate-100 hover:bg-slate-50 transition-colors">
+              <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                 <span class="font-bold text-slate-800">${prod}</span>
                 ${diffBadge}
               </div>
-              <div class="text-xs font-semibold flex gap-4 text-slate-500">
+              <div class="text-xs font-semibold flex flex-col sm:flex-row gap-1 sm:gap-4 text-slate-500 text-right sm:text-left">
                 <span>Exp: <b class="text-slate-800">${prodExpected}</b></span>
                 <span>Count: <b class="text-blue-700">${prodCounted}</b></span>
               </div>
             </div>
             
-            <div class="${isExp ? 'block' : 'hidden'} p-4 bg-white grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="${isExp ? 'block' : 'hidden'} p-3 sm:p-4 bg-slate-50 flex flex-col gap-4">
           `;
 
-          sections.forEach(sec => {
-            const data = tallyData[activeCounter][prod]?.[sec] || {expr: "", total: 0};
-            const inputId = `input_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
-            
-            html += `
-              <div class="bg-slate-50 p-3 rounded border border-slate-200 flex flex-col gap-1.5 focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-400 transition-all">
-                <div class="flex justify-between items-center">
-                  <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">${sec}</label>
-                </div>
-                <div class="flex items-center gap-2">
-                  <input type="text" id="${inputId}" value="${data.expr}" onchange="handleInput('${prod}', '${sec}', this.value)" placeholder="e.g. 10+5+2" class="w-full bg-white border border-slate-300 rounded px-2 py-1.5 text-sm font-semibold focus:outline-none" />
-                  <div class="min-w-[40px] text-right font-bold text-blue-700 text-sm">= ${data.total}</div>
-                </div>
-              </div>
-            `;
+          groups.forEach(grp => {
+            const secs = activeSections[activeCounter][grp];
+            if (secs.length === 0) return;
+            html += `<div class="bg-white rounded-lg border border-slate-200 p-3"><div class="flex justify-between items-center mb-3"><h4 class="text-xs font-bold text-slate-500 uppercase">${grp}</h4></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+            secs.forEach(sec => { html += generateInputUI(prod, grp, sec); });
+            html += `</div></div>`;
           });
 
           html += `</div></div>`;
         });
       } 
       else {
-        // TALLY BY SECTION
-        html += `<div class="flex justify-end mb-2"><button onclick="addNewSection()" class="text-xs font-semibold text-blue-600 hover:underline">➕ Add Custom Section</button></div>`;
-        
-        sections.forEach((sec, idx) => {
-          const accId = `acc_sec_${idx}`;
+        // By Section Mode
+        groups.forEach((grp, idx) => {
+          const accId = `acc_grp_${idx}`;
           const isExp = expandedAccordions[accId];
           
-          let secCounted = 0;
-          products.forEach(p => secCounted += (tallyData[activeCounter][p]?.[sec]?.total || 0));
+          let grpCounted = 0;
+          activeSections[activeCounter][grp].forEach(s => {
+            products.forEach(p => grpCounted += (tallyData[activeCounter][p]?.[grp]?.[s]?.total || 0));
+          });
 
           html += `
-          <div class="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-            <div onclick="toggleAccordion('${accId}')" class="px-4 py-3 bg-slate-50 cursor-pointer flex items-center justify-between border-b border-slate-100 hover:bg-slate-100 transition-colors">
-              <div class="flex items-center gap-3">
-                <span class="text-lg text-slate-400">🗄️</span>
-                <span class="font-bold text-slate-800">${sec}</span>
+          <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="px-4 py-3 flex items-center justify-between border-b border-slate-100 bg-slate-50">
+              <div onclick="toggleAccordion('${accId}')" class="flex-1 cursor-pointer flex items-center gap-2">
+                <span class="font-bold text-slate-800">${grp}</span>
+                <span class="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold">${grpCounted}</span>
               </div>
-              <div class="flex items-center gap-4">
-                <span class="text-xs font-semibold text-slate-500">Section Total: <b class="text-blue-700 text-sm">${secCounted}</b></span>
-                <button onclick="event.stopPropagation(); deleteSection('${sec}')" class="text-slate-300 hover:text-rose-500 ml-2" title="Delete Section">✖</button>
-              </div>
+              <button onclick="addSubSection('${grp}')" class="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-xs font-bold shadow-sm hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0">➕ Add ${grp}</button>
             </div>
             
-            <div class="${isExp ? 'block' : 'hidden'} p-4 bg-white grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="${isExp ? 'block' : 'hidden'} p-3 sm:p-4 bg-white flex flex-col gap-4">
           `;
 
-          products.forEach(prod => {
-            const data = tallyData[activeCounter][prod]?.[sec] || {expr: "", total: 0};
-            const inputId = `input_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
-            
-            html += `
-              <div class="bg-slate-50 p-3 rounded border border-slate-200 flex flex-col gap-1.5 focus-within:border-blue-400 transition-all">
-                <label class="text-[10px] font-bold text-slate-500 uppercase tracking-wide truncate" title="${prod}">${prod}</label>
-                <div class="flex items-center gap-2">
-                  <input type="text" id="${inputId}" value="${data.expr}" onchange="handleInput('${prod}', '${sec}', this.value)" placeholder="e.g. 5+5" class="w-full bg-white border border-slate-300 rounded px-2 py-1.5 text-sm font-semibold focus:outline-none" />
-                  <div class="min-w-[40px] text-right font-bold text-blue-700 text-sm">= ${data.total}</div>
-                </div>
-              </div>
-            `;
+          activeSections[activeCounter][grp].forEach(sec => {
+            html += `<div class="bg-slate-50 rounded-lg border border-slate-200 p-3"><h4 class="text-sm font-bold text-slate-700 mb-3 border-b border-slate-200 pb-2">${sec}</h4><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+            products.forEach(prod => { html += generateInputUI(prod, grp, sec); });
+            html += `</div></div>`;
           });
 
           html += `</div></div>`;
