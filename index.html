@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Live Stock Tally Desk</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -12,7 +12,7 @@
     .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     /* Prevent iOS zoom on inputs */
-    input[type="number"] { font-size: 16px; } 
+    input[type="text"], input[type="tel"] { font-size: 16px; } 
   </style>
 </head>
 <body class="text-slate-800 min-h-screen flex flex-col">
@@ -31,6 +31,7 @@
 
   <main class="max-w-7xl mx-auto px-2 sm:px-4 py-4 w-full flex-1 flex flex-col gap-4">
     
+    <!-- FALLBACK UPLOAD -->
     <div id="fallbackUploadContainer" class="hidden bg-rose-50 border border-rose-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="text-sm text-rose-800">
         <p class="font-bold">Auto-load Failed.</p>
@@ -44,6 +45,7 @@
       </div>
     </div>
 
+    <!-- COUNTER TABS -->
     <section class="bg-white border border-slate-200 rounded-xl p-1.5 shadow-sm overflow-x-auto custom-scrollbar">
       <div id="counterTabs" class="flex gap-1.5 whitespace-nowrap min-w-max">
         <span class="text-sm text-slate-400 p-2 italic">Loading counters...</span>
@@ -52,6 +54,7 @@
 
     <div id="workspaceArea" class="hidden space-y-4">
       
+      <!-- DASHBOARD HEADER -->
       <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row justify-between gap-4">
         <div>
           <h2 id="activeCounterTitle" class="text-xl font-extrabold text-slate-800 uppercase tracking-tight">COUNTER</h2>
@@ -77,7 +80,6 @@
     const FILE_MAP = "Stock_related_map.xlsx";
     const FILE_STOCK = "Live_Stock_Inventory_19-10-2026_03-19-44 PM.xlsx";
     
-    // Grouped section definitions
     const baseGroups = [
       { name: "Main counter", count: 4 },
       { name: "Window counter", count: 4 },
@@ -95,11 +97,13 @@
     let activeCounter = null;
     let tallyMode = "product"; 
     
-    // tallyData[counter][product][group][section] = { history: [5, 10], total: 15 }
+    // tallyData[counter][product][group][section] = { expr: "10+5", total: 15 }
     let tallyData = {}; 
-    // activeSections[counter][group] = ["Main counter 1", "Main counter 2", ...]
     let activeSections = {}; 
-    let expandedAccordions = {};
+    
+    // Tracks which UI folds are open
+    let expandedLevel1 = {}; // Top level (Groups in Section Mode, Products in Product Mode)
+    let expandedLevel2 = {}; // Sub level (Subsections in Section Mode, Groups in Product Mode)
 
     window.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("fileMap").addEventListener("change", (e) => handleManualUpload(e.target.files[0], "map"));
@@ -112,13 +116,11 @@
       try {
         const resMap = await fetch(FILE_MAP);
         if (resMap.ok) { parseMapData(await resMap.arrayBuffer()); mapLoaded = true; updateBadge("statusBadgeMap", "Map: Active", "bg-emerald-100 text-emerald-800"); }
-      } catch (err) { updateBadge("statusBadgeMap", "Map: Failed", "bg-rose-100 text-rose-800"); }
-
+      } catch (err) {}
       try {
         const resStock = await fetch(FILE_STOCK);
         if (resStock.ok) { parseLiveStock(await resStock.arrayBuffer()); stockLoaded = true; updateBadge("statusBadgeStock", "Stock: Active", "bg-emerald-100 text-emerald-800"); }
-      } catch (err) { updateBadge("statusBadgeStock", "Stock: Failed", "bg-rose-100 text-rose-800"); }
-
+      } catch (err) {}
       if (!mapLoaded || !stockLoaded) document.getElementById("fallbackUploadContainer").classList.remove("hidden");
     }
 
@@ -223,7 +225,7 @@
           Object.keys(activeSections[cnt]).forEach(grp => {
             if (!tallyData[cnt][prod][grp]) tallyData[cnt][prod][grp] = {};
             activeSections[cnt][grp].forEach(sec => {
-              if (!tallyData[cnt][prod][grp][sec]) tallyData[cnt][prod][grp][sec] = { history: [], total: 0 };
+              if (!tallyData[cnt][prod][grp][sec]) tallyData[cnt][prod][grp][sec] = { expr: "", total: 0 };
             });
           });
         });
@@ -247,7 +249,7 @@
 
     function switchCounter(cnt) {
       activeCounter = cnt;
-      expandedAccordions = {}; 
+      expandedLevel1 = {}; expandedLevel2 = {};
       renderCounterTabs();
       document.getElementById("workspaceArea").classList.remove("hidden");
       document.getElementById("activeCounterTitle").textContent = `${cnt} COUNTER`;
@@ -258,50 +260,75 @@
       tallyMode = mode;
       document.getElementById("btnModeProduct").className = `px-3 py-2 rounded-md shadow-sm transition-all text-xs font-bold w-1/2 sm:w-auto ${mode === 'product' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
       document.getElementById("btnModeSection").className = `px-3 py-2 rounded-md shadow-sm transition-all text-xs font-bold w-1/2 sm:w-auto ${mode === 'section' ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-900'}`;
-      expandedAccordions = {};
+      expandedLevel1 = {}; expandedLevel2 = {};
       renderWorkspace();
     }
 
-    function toggleAccordion(id) { expandedAccordions[id] = !expandedAccordions[id]; renderWorkspace(); }
+    function toggleL1(id) { expandedLevel1[id] = !expandedLevel1[id]; renderWorkspace(); }
+    function toggleL2(id) { expandedLevel2[id] = !expandedLevel2[id]; renderWorkspace(); }
 
     function addSubSection(groupName) {
       const list = activeSections[activeCounter][groupName];
       const newName = `${groupName} ${list.length + 1}`;
       list.push(newName);
       Object.keys(tallyData[activeCounter]).forEach(prod => {
-        tallyData[activeCounter][prod][groupName][newName] = { history: [], total: 0 };
+        tallyData[activeCounter][prod][groupName][newName] = { expr: "", total: 0 };
       });
       renderWorkspace();
     }
 
-    // Input Logic - The Calculator
-    function addTallyValue(prod, grp, sec, inputId) {
+    function deleteSubSection(groupName, secName) {
+      if(confirm(`Remove ${secName}? All data typed here will be lost.`)) {
+        activeSections[activeCounter][groupName] = activeSections[activeCounter][groupName].filter(s => s !== secName);
+        Object.keys(tallyData[activeCounter]).forEach(prod => {
+          delete tallyData[activeCounter][prod][groupName][secName];
+        });
+        renderWorkspace();
+      }
+    }
+
+    // MATH & INPUT LOGIC
+    function parseMathString(str) {
+      if (!str) return 0;
+      // Evaluate basic sum e.g. "10+5+2+"
+      const parts = str.split('+');
+      return parts.reduce((acc, val) => acc + (Number(val.trim()) || 0), 0);
+    }
+
+    function onLiveInput(inputEl, prod, grp, sec, totalDispId) {
+      // Clean invalid characters, keep only digits and '+'
+      let cleanVal = inputEl.value.replace(/[^0-9+]/g, '');
+      inputEl.value = cleanVal; 
+      
+      const total = parseMathString(cleanVal);
+      
+      // Update state
+      tallyData[activeCounter][prod][grp][sec].expr = cleanVal;
+      tallyData[activeCounter][prod][grp][sec].total = total;
+      
+      // Update specific local total DOM element directly (avoids breaking keyboard focus)
+      const totEl = document.getElementById(totalDispId);
+      if (totEl) totEl.textContent = `= ${total}`;
+
+      // Update Global Headers
+      updateGlobalHeaders();
+    }
+
+    function appendPlus(inputId) {
       const inputEl = document.getElementById(inputId);
-      const val = Number(inputEl.value);
-      if (val > 0) {
-        const data = tallyData[activeCounter][prod][grp][sec];
-        data.history.push(val);
-        data.total += val;
-        inputEl.value = ""; 
-        renderWorkspace();
-        setTimeout(() => document.getElementById(inputId)?.focus(), 0);
+      if(inputEl) {
+        if (inputEl.value && !inputEl.value.endsWith('+')) {
+          inputEl.value += '+';
+          // Trigger the input event manually to re-calculate just in case
+          inputEl.dispatchEvent(new Event('input'));
+        }
+        inputEl.focus();
       }
     }
 
-    function undoTallyValue(prod, grp, sec) {
-      const data = tallyData[activeCounter][prod][grp][sec];
-      if (data.history.length > 0) {
-        const last = data.history.pop();
-        data.total -= last;
-        renderWorkspace();
-      }
-    }
-
-    function renderWorkspace() {
+    function updateGlobalHeaders() {
       if (!activeCounter) return;
-
-      const container = document.getElementById("tallyContainer");
-      const products = Object.keys(expectedStock[activeCounter]).sort();
+      const products = Object.keys(expectedStock[activeCounter]);
       const groups = Object.keys(activeSections[activeCounter]);
       
       let grandExpected = 0, grandCounted = 0;
@@ -320,36 +347,46 @@
       const diff = grandCounted - grandExpected;
       varEl.textContent = diff === 0 ? "Balanced" : `Variance: ${diff > 0 ? '+'+diff : diff}`;
       varEl.className = diff === 0 ? "text-emerald-600 font-bold" : "text-rose-600 font-bold";
+    }
 
+    // MAIN RENDER LOOP
+    function renderWorkspace() {
+      if (!activeCounter) return;
+
+      const container = document.getElementById("tallyContainer");
+      const products = Object.keys(expectedStock[activeCounter]).sort();
+      const groups = Object.keys(activeSections[activeCounter]);
+      
+      updateGlobalHeaders(); // Sync topside numbers
+      
       let html = "";
 
       const generateInputUI = (prod, grp, sec) => {
-        const data = tallyData[activeCounter][prod]?.[grp]?.[sec] || {history: [], total: 0};
+        const data = tallyData[activeCounter][prod]?.[grp]?.[sec] || {expr: "", total: 0};
         const inputId = `inp_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
-        const histStr = data.history.length > 0 ? data.history.join(" + ") : "0";
+        const totId = `tot_${prod.replace(/\s/g,'_')}_${sec.replace(/\s/g,'_')}`;
+        const label = tallyMode === 'product' ? sec : prod;
         
         return `
-          <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-              <label class="text-xs font-bold text-slate-700 uppercase tracking-wide truncate w-3/5">${tallyMode === 'product' ? sec : prod}</label>
-              <div class="flex items-center gap-1 text-[10px] text-slate-400 max-w-[40%] overflow-x-auto custom-scrollbar whitespace-nowrap">
-                <span>${histStr}</span>
-                ${data.history.length > 0 ? `<button onclick="undoTallyValue('${prod}', '${grp}', '${sec}')" class="ml-1 text-rose-500 hover:text-rose-700" title="Undo last entry">↶</button>` : ''}
-              </div>
-            </div>
-            <div class="flex items-center gap-2">
-              <input type="number" id="${inputId}" placeholder="Enter count" class="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-base font-semibold focus:outline-none focus:border-blue-400 focus:bg-white transition-colors" onkeypress="if(event.key === 'Enter') addTallyValue('${prod}', '${grp}', '${sec}', '${inputId}')" />
-              <button onclick="addTallyValue('${prod}', '${grp}', '${sec}', '${inputId}')" class="bg-blue-600 active:bg-blue-700 text-white rounded-lg w-10 h-10 flex items-center justify-center font-bold text-lg shadow-sm">+</button>
-              <div class="min-w-[40px] text-right font-bold text-slate-900 text-lg">= ${data.total}</div>
+          <div class="bg-white p-2.5 rounded-lg border border-slate-200 shadow-sm flex flex-col gap-2">
+            <label class="text-xs font-bold text-slate-700 uppercase truncate w-full" title="${label}">${label}</label>
+            <div class="flex items-center gap-1.5">
+              <input type="tel" id="${inputId}" value="${data.expr}" 
+                     placeholder="e.g. 10+5" 
+                     oninput="onLiveInput(this, '${prod}', '${grp}', '${sec}', '${totId}')"
+                     class="flex-1 bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-base font-semibold focus:outline-none focus:border-blue-400 focus:bg-white transition-colors" />
+              <button onclick="appendPlus('${inputId}')" class="bg-slate-200 text-slate-800 rounded px-3 py-1.5 font-extrabold text-lg shadow-sm active:bg-slate-300">+</button>
+              <div id="${totId}" class="min-w-[40px] text-right font-bold text-blue-700 text-base">= ${data.total}</div>
             </div>
           </div>
         `;
       };
 
       if (tallyMode === "product") {
+        // TOP LEVEL: PRODUCTS
         products.forEach((prod, idx) => {
-          const accId = `acc_prod_${idx}`;
-          const isExp = expandedAccordions[accId];
+          const l1Id = `p_l1_${idx}`;
+          const isExpL1 = expandedLevel1[l1Id];
           
           let prodExpected = expectedStock[activeCounter][prod] || 0;
           let prodCounted = 0;
@@ -359,7 +396,7 @@
 
           html += `
           <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div onclick="toggleAccordion('${accId}')" class="px-4 py-3 cursor-pointer flex items-center justify-between border-b border-slate-100 hover:bg-slate-50 transition-colors">
+            <div onclick="toggleL1('${l1Id}')" class="px-4 py-3 cursor-pointer flex items-center justify-between border-b border-slate-100 hover:bg-slate-50 transition-colors">
               <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                 <span class="font-bold text-slate-800">${prod}</span>
                 ${diffBadge}
@@ -370,13 +407,28 @@
               </div>
             </div>
             
-            <div class="${isExp ? 'block' : 'hidden'} p-3 sm:p-4 bg-slate-50 flex flex-col gap-4">
+            <div class="${isExpL1 ? 'block' : 'hidden'} p-3 bg-slate-50 flex flex-col gap-2">
           `;
 
-          groups.forEach(grp => {
+          // SUB LEVEL: GROUPS (Main counter, window counter...)
+          groups.forEach((grp, gIdx) => {
             const secs = activeSections[activeCounter][grp];
             if (secs.length === 0) return;
-            html += `<div class="bg-white rounded-lg border border-slate-200 p-3"><div class="flex justify-between items-center mb-3"><h4 class="text-xs font-bold text-slate-500 uppercase">${grp}</h4></div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+
+            const l2Id = `p_l2_${idx}_${gIdx}`;
+            const isExpL2 = expandedLevel2[l2Id];
+            
+            let grpCount = 0;
+            secs.forEach(s => grpCount += (tallyData[activeCounter][prod]?.[grp]?.[s]?.total || 0));
+
+            html += `
+              <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <div onclick="toggleL2('${l2Id}')" class="px-3 py-2 cursor-pointer flex justify-between items-center bg-white hover:bg-slate-50 border-b border-slate-100">
+                  <span class="text-sm font-bold text-slate-600">${grp}</span>
+                  <span class="text-xs font-bold bg-slate-100 px-2 py-0.5 rounded text-slate-600">${grpCount} counted</span>
+                </div>
+                <div class="${isExpL2 ? 'grid' : 'hidden'} p-2 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-slate-50/50">
+            `;
             secs.forEach(sec => { html += generateInputUI(prod, grp, sec); });
             html += `</div></div>`;
           });
@@ -385,10 +437,10 @@
         });
       } 
       else {
-        // By Section Mode
+        // TOP LEVEL: BY SECTION GROUP (Main counter, window counter)
         groups.forEach((grp, idx) => {
-          const accId = `acc_grp_${idx}`;
-          const isExp = expandedAccordions[accId];
+          const l1Id = `s_l1_${idx}`;
+          const isExpL1 = expandedLevel1[l1Id];
           
           let grpCounted = 0;
           activeSections[activeCounter][grp].forEach(s => {
@@ -397,19 +449,36 @@
 
           html += `
           <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div class="px-4 py-3 flex items-center justify-between border-b border-slate-100 bg-slate-50">
-              <div onclick="toggleAccordion('${accId}')" class="flex-1 cursor-pointer flex items-center gap-2">
+            <div class="px-4 py-3 flex items-center justify-between border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors cursor-pointer">
+              <div onclick="toggleL1('${l1Id}')" class="flex-1 flex items-center gap-2">
                 <span class="font-bold text-slate-800">${grp}</span>
                 <span class="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-bold">${grpCounted}</span>
               </div>
-              <button onclick="addSubSection('${grp}')" class="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-xs font-bold shadow-sm hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0">➕ Add ${grp}</button>
+              <button onclick="addSubSection('${grp}')" class="px-3 py-1 bg-white border border-slate-200 text-slate-600 rounded text-xs font-bold shadow-sm hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0">➕ Add Sub</button>
             </div>
             
-            <div class="${isExp ? 'block' : 'hidden'} p-3 sm:p-4 bg-white flex flex-col gap-4">
+            <div class="${isExpL1 ? 'block' : 'hidden'} p-3 bg-slate-50 flex flex-col gap-2">
           `;
 
-          activeSections[activeCounter][grp].forEach(sec => {
-            html += `<div class="bg-slate-50 rounded-lg border border-slate-200 p-3"><h4 class="text-sm font-bold text-slate-700 mb-3 border-b border-slate-200 pb-2">${sec}</h4><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">`;
+          // SUB LEVEL: SUBSECTIONS (Main counter 1, Main counter 2)
+          activeSections[activeCounter][grp].forEach((sec, sIdx) => {
+            const l2Id = `s_l2_${idx}_${sIdx}`;
+            const isExpL2 = expandedLevel2[l2Id];
+            
+            let secCount = 0;
+            products.forEach(p => secCount += (tallyData[activeCounter][p]?.[grp]?.[sec]?.total || 0));
+
+            html += `
+              <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                <div class="px-3 py-2 flex justify-between items-center bg-white border-b border-slate-100">
+                  <div onclick="toggleL2('${l2Id}')" class="flex-1 cursor-pointer flex items-center gap-2">
+                    <span class="text-sm font-bold text-slate-700">${sec}</span>
+                    <span class="text-xs font-bold text-blue-600">${secCount} counted</span>
+                  </div>
+                  <button onclick="deleteSubSection('${grp}', '${sec}')" class="text-slate-300 hover:text-rose-500 font-bold px-2 py-0.5" title="Delete Section">✖</button>
+                </div>
+                <div class="${isExpL2 ? 'grid' : 'hidden'} p-2 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 bg-slate-50/50">
+            `;
             products.forEach(prod => { html += generateInputUI(prod, grp, sec); });
             html += `</div></div>`;
           });
